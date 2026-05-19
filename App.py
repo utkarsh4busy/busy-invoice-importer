@@ -51,7 +51,7 @@ def db_fetch_all() -> list[dict]:
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 API_URL       = "https://ocr-preprod.busy.in/voucher/v1/ocr/"
-DEFAULT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBsaWNhdGlvbl9pZCI6MiwiYXBwbGljYXRpb25fc3Vic2NyaXB0aW9uX2lkIjoxNSwiZXhwIjoxNzc4NzQ4MjQyLCJzZXJ2aWNlIjoib2NyIn0.BLvsuwyecG330Mi50R7813WkJwgDp9bkPxSfFVL_8dU"
+DEFAULT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBsaWNhdGlvbl9pZCI6MiwiYXBwbGljYXRpb25fc3Vic2NyaXB0aW9uX2lkIjoyNywiZXhwIjoxNzc5NzczODQ5LCJzZXJ2aWNlIjoib2NyIn0.2xPWJe_P_qjSU9cq0dENSWF0ZqMLjUqySeHS5Wk3Xyk"
 INVOICE_TYPE  = "purchase"
 
 # Path to bundled master agreement
