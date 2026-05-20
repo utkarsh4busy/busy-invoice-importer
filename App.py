@@ -70,7 +70,6 @@ COLUMNS = [
 ]
 
 # ─── MASTER AGREEMENT ─────────────────────────────────────────────────────────
-@st.cache_data
 def load_master_vendors() -> set:
     """Load vendor names from master agreement (column: Vendor Name)."""
     try:
