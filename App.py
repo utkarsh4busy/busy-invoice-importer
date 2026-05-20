@@ -10,6 +10,7 @@ from datetime import datetime
 import time
 import os
 import uuid
+import re
 
 # ─── SUPABASE ─────────────────────────────────────────────────────────────────
 SUPABASE_URL  = os.environ.get("SUPABASE_URL", "https://zvziwaeeabfpdwqdektj.supabase.co")
@@ -51,7 +52,7 @@ def db_fetch_all() -> list[dict]:
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 API_URL       = "https://ocr-preprod.busy.in/voucher/v1/ocr/"
-DEFAULT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBsaWNhdGlvbl9pZCI6MiwiYXBwbGljYXRpb25fc3Vic2NyaXB0aW9uX2lkIjoyNywiZXhwIjoxNzc5NzczODQ5LCJzZXJ2aWNlIjoib2NyIn0.2xPWJe_P_qjSU9cq0dENSWF0ZqMLjUqySeHS5Wk3Xyk"
+DEFAULT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBsaWNhdGlvbl9pZCI6MiwiYXBwbGljYXRpb25fc3Vic2NyaXB0aW9uX2lkIjoxNSwiZXhwIjoxNzc4NzQ4MjQyLCJzZXJ2aWNlIjoib2NyIn0.BLvsuwyecG330Mi50R7813WkJwgDp9bkPxSfFVL_8dU"
 INVOICE_TYPE  = "purchase"
 
 # Path to bundled master agreement
@@ -83,14 +84,84 @@ def load_master_vendors() -> set:
     except Exception as e:
         return set()
 
+def _normalize(s: str) -> str:
+    """Lowercase, collapse whitespace, strip punctuation for comparison."""
+    s = s.lower().strip()
+    s = re.sub(r"[^\w\s]", "", s)   # remove punctuation
+    s = re.sub(r"\s+", " ", s)       # collapse spaces
+    return s
+
+def _token_set(s: str) -> set:
+    return set(_normalize(s).split())
+
+def _similarity(a: str, b: str) -> float:
+    """
+    Token-set similarity: what fraction of the smaller token set
+    is contained in the larger. Handles word-order differences,
+    abbreviations, and extra words gracefully.
+    """
+    ta, tb = _token_set(a), _token_set(b)
+    if not ta or not tb:
+        return 0.0
+    intersection = ta & tb
+    return len(intersection) / min(len(ta), len(tb))
+
+# Common legal suffix aliases — normalise before comparing
+_SUFFIX_MAP = {
+    "private limited": "pvt ltd",
+    "pvt. ltd.": "pvt ltd",
+    "pvt. ltd": "pvt ltd",
+    "pvt ltd.": "pvt ltd",
+    "limited": "ltd",
+    "llp": "llp",
+    "co-working": "coworking",
+    "co working": "coworking",
+    "infra": "infra",
+    "infrra": "infra",   # common OCR typo
+    "infrastructure": "infra",
+}
+
+def _canonical(s: str) -> str:
+    """Apply suffix/alias normalisation on top of basic normalise."""
+    s = _normalize(s)
+    for orig, repl in _SUFFIX_MAP.items():
+        s = s.replace(orig, repl)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+MATCH_THRESHOLD = 0.75   # fraction of tokens that must overlap
+
 def check_vendor_match(party_name: str) -> tuple[bool, str]:
-    """Returns (matched, mismatch_detail). Exact string match."""
+    """
+    Returns (matched, mismatch_detail).
+    Matching is case-insensitive, punctuation-agnostic, and fuzzy enough
+    to handle common OCR typos, abbreviation differences, and legal-suffix
+    variants (e.g. 'Private Limited' vs 'Pvt Ltd', 'Infrra' vs 'Infra').
+    """
     vendors = load_master_vendors()
     name = (party_name or "").strip()
     if not name:
         return False, "Vendor name is empty in invoice"
-    if name in vendors:
+
+    canon_name = _canonical(name)
+
+    # 1. Exact canonical match
+    for v in vendors:
+        if _canonical(v) == canon_name:
+            return True, ""
+
+    # 2. Token-set fuzzy match
+    best_score = 0.0
+    best_vendor = ""
+    for v in vendors:
+        score = _similarity(_canonical(name), _canonical(v))
+        if score > best_score:
+            best_score = score
+            best_vendor = v
+
+    if best_score >= MATCH_THRESHOLD:
         return True, ""
+
     return False, f"Vendor name mismatch: invoice has '{name}', not found in master agreement"
 
 # ─── API CALL ─────────────────────────────────────────────────────────────────
